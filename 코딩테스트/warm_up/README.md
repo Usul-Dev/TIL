@@ -3,4 +3,4 @@
 - 3개월 짜리 루틴
 - 주 6일
 - 1일 최소 3문제
-- 백준 문제별 단계풀기 (https://www.acmicpc.net/step)
+- 백준 문제별 단계풀기 (https://www.acmicpc.net/step)****
