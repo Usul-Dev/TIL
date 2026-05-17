@@ -5,12 +5,14 @@ on:
     paths:
       - "코딩테스트/**"
       - ".github/workflows/coding-test.yml"
+      - ".github/pull_request_template.md"
   push:
     branches:
       - main
     paths:
       - "코딩테스트/**"
       - ".github/workflows/coding-test.yml"
+      - ".github/pull_request_template.md"
 
 permissions:
   contents: read
