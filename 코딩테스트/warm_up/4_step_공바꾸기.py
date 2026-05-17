@@ -18,16 +18,13 @@ https://www.acmicpc.net/problem/10813
     3  1  4  2  5
 """
 
-
 import sys
 
 N, M = map(int, sys.stdin.readline().split())
-n_dict = {i: i for i in range(1, N+1)}
+n_dict = {i: i for i in range(1, N + 1)}
 
 for _ in range(M):
-    i, j = map(int, sys.stdin.readline().split())
-    n_dict[i], n_dict[j] = n_dict[j], n_dict[i]
+	i, j = map(int, sys.stdin.readline().split())
+	n_dict[i], n_dict[j] = n_dict[j], n_dict[i]
 
 print(*n_dict.values())
-
-
