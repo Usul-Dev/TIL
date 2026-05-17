@@ -12,7 +12,7 @@ digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 result = []
 
 while N > 0:
-    N, r = divmod(N, B)
-    result.append(digits[r])
+	N, r = divmod(N, B)
+	result.append(digits[r])
 
 print("".join(reversed(result)))

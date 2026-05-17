@@ -6,11 +6,9 @@ import sys
 
 result = []
 for i in range(int(sys.stdin.readline().strip())):
-    R, S = sys.stdin.readline().split()
-    for string_data in S:
-        result.append(string_data*int(R))
+	R, S = sys.stdin.readline().split()
+	for string_data in S:
+		result.append(string_data * int(R))
 
-    print(''.join(result))
-    result = []
-
-
+	print("".join(result))
+	result = []

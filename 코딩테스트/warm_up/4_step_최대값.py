@@ -6,8 +6,8 @@ import sys
 
 result = {}
 for i in range(1, 10):
-    a = int(sys.stdin.readline())
-    result[a] = i
+	a = int(sys.stdin.readline())
+	result[a] = i
 
 k = max(result)
 print(k)
