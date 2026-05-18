@@ -44,6 +44,7 @@ Thumbs.db
 .tox/
 .nox/
 .coverage
+coverage.xml
 .pytest_cache/
 cover/
 *.cover

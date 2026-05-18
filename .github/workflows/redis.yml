@@ -57,6 +57,9 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     env:
       TESTCONTAINERS_RYUK_DISABLED: "true"
 
@@ -85,5 +88,18 @@ jobs:
       - name: Check Docker
         run: docker info
 
-      - name: Run tests
-        run: uv run --locked pytest -q
+      - name: Run tests with coverage
+        run: >
+          uv run --locked pytest -q
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: 레디스/coverage.xml
+          flags: redis
+          name: redis-py313
+          fail_ci_if_error: true
