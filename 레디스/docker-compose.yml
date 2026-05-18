@@ -1,0 +1,12 @@
+name: redis-study
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    command: [
+        "redis-server",
+        "--save", "", #  RDB 스냅샷 저장 비활성화
+        "--appendonly", "no" # AOF(Append Only File) 비활성화
+    ]
