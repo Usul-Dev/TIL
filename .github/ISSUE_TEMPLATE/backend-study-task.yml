@@ -1,0 +1,82 @@
+name: Backend Study Task
+description: Parent Issue에 연결할 실제 학습/구현 작업을 등록합니다.
+title: "[Task] "
+labels:
+  - type/task
+  - track/backend
+body:
+  - type: markdown
+    attributes:
+      value: |
+        이 템플릿은 Parent Issue 아래에 둘 실제 실행 단위입니다.
+        생성 후 관련 Parent Issue의 Sub-issue로 연결하거나 Parent Issue 본문 체크리스트에 링크합니다.
+  - type: input
+    id: parent
+    attributes:
+      label: Parent Issue
+      description: 연결할 상위 학습 주제 Issue 번호 또는 링크입니다.
+      placeholder: "#12"
+    validations:
+      required: true
+  - type: dropdown
+    id: work_type
+    attributes:
+      label: 작업 유형
+      description: 이 티켓이 어떤 학습 산출물을 만드는지 고릅니다.
+      options:
+        - concept
+        - implementation
+        - performance
+        - production
+        - interview
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: 목표
+      description: 이 티켓 하나에서 끝낼 구체적인 작업을 적습니다.
+      placeholder: SET NX PX 기반의 간단한 Redis Lock을 구현하고, 만료 시간 누락 시 생기는 문제를 테스트로 재현한다.
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: 체크리스트
+      value: |
+        - [ ] 개념 또는 문제 상황을 정리했습니다.
+        - [ ] 코드, 실험, 문서 중 필요한 산출물을 만들었습니다.
+        - [ ] 트레이드오프와 한계를 기록했습니다.
+        - [ ] 관련 README 또는 학습 문서에 링크를 남겼습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: engineering_notes
+    attributes:
+      label: 백엔드 엔지니어링 관점
+      description: 성능, 운영, 장애, 데이터 모델링, 동시성, 보안 중 관련된 관점을 적습니다.
+      value: |
+        ## 성능
+
+        -
+
+        ## 운영 / 장애
+
+        -
+
+        ## 데이터 모델링 / 동시성
+
+        -
+
+        ## 보안
+
+        -
+  - type: textarea
+    id: interview
+    attributes:
+      label: 면접 질문 후보
+      description: 이 티켓에서 뽑을 수 있는 경력직 면접 질문을 적습니다.
+      placeholder: |
+        - Redis 분산락에서 TTL이 필요한 이유는 무엇인가요?
+        - Redlock은 어떤 문제를 해결하려고 하나요?

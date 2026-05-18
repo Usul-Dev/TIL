@@ -1,0 +1,56 @@
+# GitHub는 이 파일만으로 labels를 자동 생성하지 않습니다.
+# 라벨 목록의 기준 문서로 사용하고, 필요하면 GitHub UI 또는 gh CLI로 동기화합니다.
+- name: track/backend
+  color: "0E8A16"
+  description: 백엔드 엔지니어링 학습 티켓
+- name: area/redis
+  color: "D93F0B"
+  description: Redis 관련 학습
+- name: area/database
+  color: "5319E7"
+  description: Database 관련 학습
+- name: area/system-design
+  color: "1D76DB"
+  description: System Design 관련 학습
+- name: type/topic
+  color: "FBCA04"
+  description: Parent Issue로 관리할 학습 주제
+- name: type/task
+  color: "C5DEF5"
+  description: 실제 실행 단위 학습 티켓
+- name: type/concept
+  color: "BFDADC"
+  description: 개념 이해와 정리
+- name: type/implementation
+  color: "B4A7D6"
+  description: 코드 구현 또는 실습
+- name: type/performance
+  color: "F9D0C4"
+  description: 성능 측정, 병목 분석, 벤치마크
+- name: type/production
+  color: "D4C5F9"
+  description: 운영, 장애, 모니터링, 배포 관점
+- name: type/interview
+  color: "FEF2C0"
+  description: 경력직 면접 질문과 답변 정리
+- name: output/docs
+  color: "C2E0C6"
+  description: 문서 산출물
+- name: output/code
+  color: "C2E0C6"
+  description: 코드 산출물
+- name: output/benchmark
+  color: "C2E0C6"
+  description: 벤치마크 또는 실험 결과 산출물
+- name: priority/p0
+  color: "B60205"
+  description: 가장 먼저 진행할 핵심 학습
+- name: priority/p1
+  color: "D93F0B"
+  description: 우선순위가 높은 학습
+- name: priority/p2
+  color: "FBCA04"
+  description: 일반 우선순위 학습
+- name: priority/p3
+  color: "CCCCCC"
+  description: 여유가 있을 때 진행할 학습
