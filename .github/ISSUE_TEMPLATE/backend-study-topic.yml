@@ -1,0 +1,92 @@
+name: Backend Study Topic
+description: 백엔드 기술의 세부 학습 주제를 Parent Issue로 등록합니다.
+title: "[Study] "
+labels:
+  - type/topic
+  - track/backend
+body:
+  - type: markdown
+    attributes:
+      value: |
+        이 템플릿은 `Redis Lock`, `Cache Aside`, `DB Index`처럼 깊게 팔 학습 주제를 위한 Parent Issue입니다.
+        생성 후 `Backend Study Roadmap` Project에 추가하고, 관련 기술 Milestone을 지정합니다.
+  - type: input
+    id: area
+    attributes:
+      label: 기술 영역
+      description: Milestone과 맞추는 큰 기술 단위입니다.
+      placeholder: Redis
+    validations:
+      required: true
+  - type: input
+    id: topic
+    attributes:
+      label: 학습 주제
+      description: 이번에 깊게 팔 구체적인 주제입니다.
+      placeholder: Redis Lock
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 학습 목표
+      description: 이 주제를 끝냈을 때 설명하거나 구현할 수 있어야 하는 내용을 적습니다.
+      placeholder: |
+        - Redis 기반 분산락이 필요한 상황을 설명한다.
+        - SET NX PX 기반 락 구현의 한계를 이해한다.
+        - 운영 환경에서 락 만료, 재시도, 장애 케이스를 판단한다.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 학습 범위
+      description: 개념, 구현, 성능, 운영, 면접 관점에서 다룰 범위를 정합니다.
+      value: |
+        ## 핵심 개념
+
+        -
+
+        ## 구현 / 실습
+
+        -
+
+        ## 성능 관점
+
+        -
+
+        ## 현업 고민 포인트
+
+        -
+
+        ## 경력직 면접 질문
+
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: sub_issues
+    attributes:
+      label: 예상 Sub-issues
+      description: 실제 작업 티켓으로 쪼갤 후보를 적습니다.
+      value: |
+        - [ ] 개념 정리
+        - [ ] 최소 구현
+        - [ ] 성능/장애 케이스 실험
+        - [ ] 면접 질문 정리
+        - [ ] 최종 문서 정리
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 기준
+      description: 이 Parent Issue를 닫기 위한 기준입니다.
+      value: |
+        - [ ] 관련 Sub-issues를 완료했습니다.
+        - [ ] 코드 또는 실험 결과를 남겼습니다.
+        - [ ] 현업 운영 관점의 주의점을 정리했습니다.
+        - [ ] 경력직 면접 질문과 답변을 정리했습니다.
+        - [ ] 주제 디렉터리의 README 또는 별도 문서에 최종 정리를 반영했습니다.
+    validations:
+      required: true
