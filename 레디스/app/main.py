@@ -17,7 +17,7 @@ app.include_router(user_v1_router)
 app.include_router(router)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import uvicorn
 
     uvicorn.run(
