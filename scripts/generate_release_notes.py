@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 
 TAG_PATTERN = re.compile(r"^v(?P<year>\d{4})-W(?P<week>0[1-9]|[1-4]\d|5[0-3])$")
+BASE_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?:~[0-9]+)?$")
 FIELD_SEPARATOR = "\x1f"
 RECORD_SEPARATOR = "\x1e"
 DEFAULT_IGNORED_TOPICS = ".github,.idea,scripts,docs"
@@ -121,9 +122,22 @@ def release_tags() -> list[str]:
     return sorted(tags, key=tag_key)
 
 
+def validate_base_ref(base_ref: str) -> str:
+    if not base_ref:
+        return ""
+    if base_ref != base_ref.strip() or "\n" in base_ref or "\r" in base_ref:
+        raise ValueError(f"Invalid base ref: {base_ref!r}")
+    if ".." in base_ref or "//" in base_ref or base_ref.endswith((".", ".lock")):
+        raise ValueError(f"Invalid base ref: {base_ref!r}")
+    if not BASE_REF_PATTERN.fullmatch(base_ref):
+        raise ValueError(f"Invalid base ref: {base_ref!r}")
+    return base_ref
+
+
 def previous_release_tag(current_version: str, base_ref: str) -> str | None:
-    if base_ref:
-        return base_ref
+    valid_base_ref = validate_base_ref(base_ref)
+    if valid_base_ref:
+        return valid_base_ref
     current_key = tag_key(current_version)
     previous_tags = [tag for tag in release_tags() if tag_key(tag) < current_key]
     return previous_tags[-1] if previous_tags else None
@@ -285,6 +299,9 @@ def write_github_outputs(metadata: dict[str, object]) -> None:
                 value = str(value).lower()
             if value is None:
                 value = ""
+            value = str(value)
+            if "\n" in value or "\r" in value:
+                raise ValueError(f"Invalid GitHub output value for {key}")
             file.write(f"{key}={value}\n")
 
 
