@@ -15,15 +15,17 @@ from zoneinfo import ZoneInfo
 
 TAG_PATTERN = re.compile(r"^v(?P<year>\d{4})-W(?P<week>0[1-9]|[1-4]\d|5[0-3])$")
 BASE_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?:~[0-9]+)?$")
+PR_MERGE_SUBJECT = re.compile(r"^Merge pull request #(?P<number>\d+) from .+$")
 FIELD_SEPARATOR = "\x1f"
 RECORD_SEPARATOR = "\x1e"
 DEFAULT_IGNORED_TOPICS = ".github,.idea,scripts,docs"
 
 
 @dataclass(frozen=True)
-class Commit:
+class PullRequest:
     hash: str
-    subject: str
+    number: int
+    title: str
     files: list[str]
     topics: list[str]
 
@@ -159,27 +161,55 @@ def topic_for_path(path: str, ignored: set[str]) -> str | None:
     return topic
 
 
-def changed_files(commit_hash: str) -> list[str]:
+def merge_changed_files(commit_hash: str) -> list[str]:
     output = run_git(
-        ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit_hash]
+        [
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            "-m",
+            "--first-parent",
+            commit_hash,
+        ]
     )
-    return [line for line in output.splitlines() if line]
+    return list(dict.fromkeys(line for line in output.splitlines() if line))
 
 
 def commit_log_range(previous_tag: str | None) -> str:
     return f"{previous_tag}..HEAD" if previous_tag else "HEAD"
 
 
-def collect_commits(
+def pr_title(subject: str, body: str) -> str | None:
+    match = PR_MERGE_SUBJECT.fullmatch(subject)
+    if match is None:
+        return None
+    for line in body.splitlines():
+        title = line.strip()
+        if title:
+            return title
+    return subject
+
+
+def pr_number(subject: str) -> int | None:
+    match = PR_MERGE_SUBJECT.fullmatch(subject)
+    return int(match.group("number")) if match else None
+
+
+def collect_pull_requests(
     previous_tag: str | None,
     since: dt.datetime,
     before: dt.datetime,
     ignored: set[str],
-) -> list[Commit]:
-    git_format = f"%H{FIELD_SEPARATOR}%P{FIELD_SEPARATOR}%s{RECORD_SEPARATOR}"
+) -> list[PullRequest]:
+    git_format = (
+        f"%H{FIELD_SEPARATOR}%s{FIELD_SEPARATOR}%b{RECORD_SEPARATOR}"
+    )
     output = run_git(
         [
             "log",
+            "--first-parent",
+            "--merges",
             "--reverse",
             f"--format={git_format}",
             f"--since={since.isoformat(timespec='seconds')}",
@@ -187,16 +217,18 @@ def collect_commits(
             commit_log_range(previous_tag),
         ]
     )
-    commits: list[Commit] = []
+    pull_requests: list[PullRequest] = []
 
     for record in output.split(RECORD_SEPARATOR):
         if not record.strip():
             continue
-        commit_hash, parents, subject = record.lstrip("\n").split(FIELD_SEPARATOR, 2)
-        if len(parents.split()) > 1:
+        commit_hash, subject, body = record.lstrip("\n").split(FIELD_SEPARATOR, 2)
+        number = pr_number(subject.strip())
+        title = pr_title(subject.strip(), body.strip())
+        if number is None or title is None:
             continue
 
-        files = changed_files(commit_hash)
+        files = merge_changed_files(commit_hash)
         topics = []
         seen_topics = set()
         for file_path in files:
@@ -206,39 +238,42 @@ def collect_commits(
                 topics.append(topic)
 
         if topics:
-            commits.append(
-                Commit(
+            pull_requests.append(
+                PullRequest(
                     hash=commit_hash,
-                    subject=subject.strip(),
+                    number=number,
+                    title=title,
                     files=files,
                     topics=topics,
                 )
             )
 
-    return commits
+    return pull_requests
 
 
-def topic_order(commits: list[Commit]) -> list[str]:
+def topic_order(pull_requests: list[PullRequest]) -> list[str]:
     order: list[str] = []
     seen = set()
-    for commit in commits:
-        for topic in commit.topics:
+    for pull_request in pull_requests:
+        for topic in pull_request.topics:
             if topic not in seen:
                 seen.add(topic)
                 order.append(topic)
     return order
 
 
-def commits_by_topic(commits: list[Commit]) -> dict[str, list[Commit]]:
-    grouped = {topic: [] for topic in topic_order(commits)}
-    for commit in commits:
-        for topic in commit.topics:
-            grouped[topic].append(commit)
+def pull_requests_by_topic(
+    pull_requests: list[PullRequest],
+) -> dict[str, list[PullRequest]]:
+    grouped = {topic: [] for topic in topic_order(pull_requests)}
+    for pull_request in pull_requests:
+        for topic in pull_request.topics:
+            grouped[topic].append(pull_request)
     return grouped
 
 
-def render_commit(commit: Commit) -> str:
-    return f"- `{commit.hash[:7]}` {commit.subject}"
+def render_pull_request(pull_request: PullRequest) -> str:
+    return f"- #{pull_request.number} {pull_request.title}"
 
 
 def render_markdown(
@@ -247,12 +282,12 @@ def render_markdown(
     week_start: dt.datetime,
     week_end: dt.datetime,
     previous_tag: str | None,
-    commits: list[Commit],
+    pull_requests: list[PullRequest],
 ) -> str:
     lines = [f"# {version}", ""]
     lines.append(f"- Date: {date_value.isoformat()}")
     lines.append(
-        "- Commit date range: "
+        "- Pull request merge date range: "
         f"`{week_start.isoformat(timespec='seconds')}`..."
         f"`{week_end.isoformat(timespec='seconds')}`"
         " (end exclusive)"
@@ -263,13 +298,16 @@ def render_markdown(
         lines.append("- Base ref: repository history")
     lines.append("")
 
-    grouped = commits_by_topic(commits)
+    grouped = pull_requests_by_topic(pull_requests)
     if not grouped:
-        lines.extend(["## Commits", "", "- 없음", ""])
+        lines.extend(["## Pull Requests", "", "- 없음", ""])
     else:
-        for topic, topic_commits in grouped.items():
+        for topic, topic_pull_requests in grouped.items():
             lines.extend([f"## {topic}", ""])
-            lines.extend(render_commit(commit) for commit in topic_commits)
+            lines.extend(
+                render_pull_request(pull_request)
+                for pull_request in topic_pull_requests
+            )
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
@@ -306,16 +344,16 @@ def main() -> int:
     version = version_for_date(date_value)
     previous_tag = previous_release_tag(version, args.base_ref)
     ignored = ignored_topics(args.ignore_topic)
-    commits = collect_commits(
+    pull_requests = collect_pull_requests(
         previous_tag,
         week_start,
         week_end,
         ignored,
     )
-    topics = topic_order(commits)
-    target_sha = commits[-1].hash if commits else ""
+    topics = topic_order(pull_requests)
+    target_sha = pull_requests[-1].hash if pull_requests else ""
     existing_tag = tag_exists(version)
-    should_release = bool(commits) and not existing_tag
+    should_release = bool(pull_requests) and not existing_tag
 
     output_path = Path(args.output)
     output_path.write_text(
@@ -325,7 +363,7 @@ def main() -> int:
             week_start,
             week_end,
             previous_tag,
-            commits,
+            pull_requests,
         ),
         encoding="utf-8",
     )
@@ -338,7 +376,8 @@ def main() -> int:
         "timezone": args.timezone,
         "previous_tag": previous_tag,
         "current_tag_exists": existing_tag,
-        "commit_count": len(commits),
+        "commit_count": len(pull_requests),
+        "pull_request_count": len(pull_requests),
         "topic_count": len(topics),
         "topics": topics,
         "target_sha": target_sha,
