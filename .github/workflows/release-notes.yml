@@ -1,0 +1,88 @@
+name: Release Notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_date:
+        description: "YYYY-MM-DD. 비우면 Asia/Seoul 기준 오늘 날짜를 사용합니다."
+        required: false
+        type: string
+      base_ref:
+        description: "비교 시작 ref. 날짜 필터는 항상 release_date의 ISO 주로 적용됩니다."
+        required: false
+        type: string
+      dry_run:
+        description: "릴리즈를 만들지 않고 노트만 생성합니다."
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Runs every Monday 00:05 in Asia/Seoul.
+    - cron: "5 15 * * 0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release-notes:
+    name: Generate release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Generate release notes
+        id: notes
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          RELEASE_DATE: ${{ github.event.inputs.release_date }}
+          RELEASE_BASE_REF: ${{ github.event.inputs.base_ref }}
+        run: |
+          release_date="$RELEASE_DATE"
+          if [ -z "$release_date" ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            release_date="$(TZ=Asia/Seoul date -d 'yesterday' +%F)"
+          fi
+
+          python scripts/generate_release_notes.py \
+            --date "$release_date" \
+            --output release-notes.md \
+            --metadata release-metadata.json
+
+      - name: Append job summary
+        run: cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dry-run artifact
+        if: github.event.inputs.dry_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes-${{ steps.notes.outputs.version }}
+          path: |
+            release-notes.md
+            release-metadata.json
+
+      - name: Skip release
+        if: steps.notes.outputs.should_release != 'true'
+        run: echo "No releasable topic changes or current release tag already exists."
+
+      - name: Create GitHub Release
+        if: steps.notes.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ steps.notes.outputs.version }}"
+          --target "${{ steps.notes.outputs.target_sha }}"
+          --title "${{ steps.notes.outputs.version }}"
+          --notes-file release-notes.md
