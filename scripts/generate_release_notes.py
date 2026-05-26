@@ -74,11 +74,6 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Top-level directory to omit from release note topics. Repeatable.",
     )
-    parser.add_argument(
-        "--include-merges",
-        action="store_true",
-        help="Include merge commits in the release notes.",
-    )
     return parser.parse_args()
 
 
@@ -159,7 +154,7 @@ def topic_for_path(path: str, ignored: set[str]) -> str | None:
     if "/" not in normalized:
         return None
     topic = normalized.split("/", 1)[0]
-    if topic.startswith(".") or topic in ignored:
+    if topic in ignored:
         return None
     return topic
 
@@ -180,7 +175,6 @@ def collect_commits(
     since: dt.datetime,
     before: dt.datetime,
     ignored: set[str],
-    include_merges: bool,
 ) -> list[Commit]:
     git_format = f"%H{FIELD_SEPARATOR}%P{FIELD_SEPARATOR}%s{RECORD_SEPARATOR}"
     output = run_git(
@@ -199,7 +193,7 @@ def collect_commits(
         if not record.strip():
             continue
         commit_hash, parents, subject = record.lstrip("\n").split(FIELD_SEPARATOR, 2)
-        if not include_merges and len(parents.split()) > 1:
+        if len(parents.split()) > 1:
             continue
 
         files = changed_files(commit_hash)
@@ -317,7 +311,6 @@ def main() -> int:
         week_start,
         week_end,
         ignored,
-        args.include_merges,
     )
     topics = topic_order(commits)
     target_sha = commits[-1].hash if commits else ""
