@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -27,7 +28,7 @@ def init_db() -> None:
     Returns:
         None.
     """
-    with get_connection() as conn:
+    with closing(get_connection()) as conn, conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS user_profiles (

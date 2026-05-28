@@ -42,7 +42,7 @@ class UserProfileCache:
 
         try:
             data = json.loads(raw_profile)
-            return UserProfileResponse(**data)
+            return UserProfileResponse.model_validate(data)
         except (json.JSONDecodeError, ValidationError) as exc:
             raise ValueError("Invalid cached user profile data") from exc
 

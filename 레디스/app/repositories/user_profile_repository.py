@@ -1,3 +1,5 @@
+from contextlib import closing
+
 from app.representations.user_response import UserProfileResponse
 from app.storages.sqlite import get_connection, init_db
 
@@ -15,7 +17,7 @@ class UserProfileRepository:
             User profile when the row exists, otherwise None.
         """
         init_db()
-        with get_connection() as conn:
+        with closing(get_connection()) as conn:
             row = conn.execute(
                 """
                 SELECT name, age
@@ -41,7 +43,7 @@ class UserProfileRepository:
             None.
         """
         init_db()
-        with get_connection() as conn:
+        with closing(get_connection()) as conn, conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO user_profiles (user_id, name, age)

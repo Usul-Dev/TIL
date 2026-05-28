@@ -48,6 +48,19 @@ async def test_get_user_profile_cache_hit_returns_redis_value() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_user_profile_invalid_cache_payload() -> None:
+    conn = redis_storage.get_connection()
+    user_id = 1
+    await conn.set(f"cache:user:{user_id}:profile", "[]")
+
+    with pytest.raises(HTTPException) as exc:
+        await get_user_profile(user_id, service=_service())
+
+    assert exc.value.status_code == 500
+    assert exc.value.detail == "Invalid user profile data"
+
+
+@pytest.mark.asyncio
 async def test_get_user_profile_missing() -> None:
     with pytest.raises(HTTPException) as exc:
         await get_user_profile(999, service=_service())
