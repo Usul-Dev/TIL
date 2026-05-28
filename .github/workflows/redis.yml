@@ -5,12 +5,14 @@ on:
     paths:
       - "레디스/**"
       - ".github/workflows/redis.yml"
+      - "codecov.yml"
   push:
     branches:
       - main
     paths:
       - "레디스/**"
       - ".github/workflows/redis.yml"
+      - "codecov.yml"
 
 permissions:
   contents: read

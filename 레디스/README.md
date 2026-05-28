@@ -1,3 +1,7 @@
+## 학습 문서
+
+- [Redis Cache Aside and TTL Strategy](docs/cache-aside-ttl-strategy.md)
+
 1) 자료구조 선택 질문: “왜 Redis를 썼고, 어떤 타입을 왜 골랐나?”
 
 Redis는 여러 네이티브 데이터 타입을 제공하고, 용도에 따라 성능/원자성/모델링이 달라진다.  ￼
