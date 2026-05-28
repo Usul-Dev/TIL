@@ -1,10 +1,11 @@
-import json
+from typing import Annotated
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from fastapi.routing import APIRoute, APIRouter
 
+from app.dependencies import get_user_profile_service
 from app.representations.user_response import UserProfileResponse
-from app.storages.redis import redis_storage
+from app.services.user_profile_service import UserProfileService
 
 user_v1_router = APIRouter(
     route_class=APIRoute,
@@ -16,16 +17,22 @@ user_v1_router = APIRouter(
     "/users/{user_id}/profile",
     response_model=UserProfileResponse,
 )
-async def get_user_profile(user_id: int):
-    conn = redis_storage.get_connection()
-    key = f"user:{user_id}"
-    raw_profile = await conn.get(key)
-    if raw_profile is None:
-        raise HTTPException(status_code=404, detail="User profile not found")
+async def get_user_profile(
+    user_id: int,
+    service: Annotated[
+        UserProfileService,
+        Depends(get_user_profile_service),
+    ],
+) -> UserProfileResponse:
     try:
-        data = json.loads(raw_profile)
-    except json.JSONDecodeError as exc:
+        profile = await service.get_user_profile(user_id)
+    except ValueError as exc:
         raise HTTPException(
-            status_code=500, detail="Invalid user profile data"
+            status_code=500,
+            detail="Invalid user profile data",
         ) from exc
-    return UserProfileResponse(**data)
+
+    if profile is None:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
+    return profile
