@@ -1,3 +1,5 @@
+from redis.exceptions import RedisError
+
 from app.repositories.user_profile_repository import UserProfileRepository
 from app.representations.user_response import UserProfileResponse
 from app.services.user_profile_cache import UserProfileCache
@@ -26,7 +28,11 @@ class UserProfileService:
         Returns:
             User profile when found in Redis or SQLite, otherwise None.
         """
-        cached_profile = await self.cache.get(user_id)
+        try:
+            cached_profile = await self.cache.get(user_id)
+        except RedisError:
+            cached_profile = None
+
         if cached_profile is not None:
             return cached_profile
 
@@ -34,5 +40,9 @@ class UserProfileService:
         if profile is None:
             return None
 
-        await self.cache.set(user_id, profile)
+        try:
+            await self.cache.set(user_id, profile)
+        except RedisError:
+            pass
+
         return profile

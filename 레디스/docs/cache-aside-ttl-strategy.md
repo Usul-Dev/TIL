@@ -101,6 +101,11 @@ route
 - `UserProfileRepository`: SQLite 원본 저장소 조회를 담당한다.
 - `user_route.py`: HTTP 응답과 예외 변환만 담당한다.
 
+Redis 연결 장애처럼 캐시 저장소 자체를 사용할 수 없는 경우에는 cache miss로
+간주하고 SQLite 원본 저장소를 조회한다. 원본 조회 후 Redis write가 실패해도
+요청은 실패시키지 않는다. Redis 캐시는 응답 성능을 위한 보조 계층이고,
+source of truth는 SQLite이기 때문이다.
+
 ----
 
 ## 현재 한계
