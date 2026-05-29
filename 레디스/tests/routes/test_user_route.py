@@ -1,3 +1,5 @@
+from random import Random
+
 import pytest
 from fastapi import HTTPException
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -40,6 +42,38 @@ async def test_get_user_profile_cache_miss_sets_redis() -> None:
     cached_profile = await conn.get(f"cache:user:{user_id}:profile")
     assert profile.model_dump() == {"name": "mina", "age": 29}
     assert cached_profile is not None
+
+
+@pytest.mark.asyncio
+async def test_user_profile_cache_sets_ttl_within_jitter_range() -> None:
+    user_id = 1
+    # A seeded Random makes the jitter sequence reproducible for the test.
+    cache = UserProfileCache(random_source=Random(1))
+    await cache.set(
+        user_id,
+        UserProfileResponse(name="cached-mina", age=30),
+    )
+
+    conn = redis_storage.get_connection()
+    ttl_seconds = await conn.ttl(cache.key(user_id))
+    # Redis TTL returns remaining seconds, so assert the policy range.
+    assert 60 <= ttl_seconds <= 70
+
+
+@pytest.mark.asyncio
+async def test_user_profile_cache_jitter_spreads_ttl_values() -> None:
+    cache = UserProfileCache(random_source=Random(1))
+    conn = redis_storage.get_connection()
+
+    for user_id in range(1, 4):
+        await cache.set(
+            user_id,
+            UserProfileResponse(name=f"cached-mina-{user_id}", age=30),
+        )
+
+    ttl_values = [await conn.ttl(cache.key(user_id)) for user_id in range(1, 4)]
+
+    assert len(set(ttl_values)) > 1
 
 
 @pytest.mark.asyncio

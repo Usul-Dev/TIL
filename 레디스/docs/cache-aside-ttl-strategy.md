@@ -70,8 +70,9 @@
 ## 이번 단계의 범위
 
 Issue #28에서는 cache-aside 읽기 흐름만 구현한다.
-TTL jitter, cache stampede 방지, negative caching, 캐시 무효화 전략은 후속
-이슈에서 다룬다.
+Issue #29에서는 positive cache 저장 시 TTL과 TTL jitter를 적용한다.
+cache stampede 방지 lock, negative caching, 캐시 무효화 전략은 후속 이슈에서
+다룬다.
 
 ----
 
@@ -108,10 +109,35 @@ source of truth는 SQLite이기 때문이다.
 
 ----
 
+## TTL과 TTL jitter 설정
+
+현재 user profile positive cache는 기본 TTL 60초를 사용한다. 캐시 저장 시
+0~10초의 additive jitter를 더해 실제 Redis TTL은 60~70초 사이로 설정한다.
+기존 freshness 기준을 더 짧게 만들지 않기 위해 TTL을 줄이는 방식이 아니라,
+기본 TTL에 추가 시간을 더하는 방식을 선택했다.
+
+TTL은 캐시가 오래된 데이터를 얼마나 오래 허용할지와 DB 조회를 얼마나 줄일지를
+함께 결정한다. TTL이 길면 cache hit rate는 올라가지만 원본 데이터 변경이 늦게
+반영될 수 있다. TTL이 짧으면 freshness는 좋아지지만 cache miss가 늘어 DB 부하가
+증가할 수 있다.
+
+TTL jitter는 많은 키가 같은 TTL로 저장된 뒤 같은 시점에 만료되는 상황을 완화한다.
+동시 만료가 줄어들면 특정 시점에 SQLite 조회와 Redis 재저장이 몰리는 현상을
+줄일 수 있다. 다만 cache miss 자체를 막지는 못하므로, hot key의 stampede를 더
+강하게 막으려면 lock, single-flight, soft TTL 같은 추가 전략이 필요하다.
+
+Negative cache는 "해당 사용자가 없다"는 조회 결과를 짧게 캐시하는 방식이다.
+반복되는 없는 사용자 조회를 줄일 수 있지만, 사용자가 새로 생성된 뒤에도 TTL이
+남아 있으면 404 응답이 유지될 수 있다. 현재 구현에는 사용자 생성/수정 시 캐시
+무효화 흐름이 없으므로 negative cache는 구현하지 않는다. 이후 도입한다면 positive
+cache보다 짧은 TTL을 별도로 두고, 생성/수정 이벤트와 무효화 전략을 함께 설계해야
+한다.
+
+----
+
 ## 현재 한계
 
-- TTL은 고정값을 사용한다.
-- TTL jitter는 아직 적용하지 않았다.
+- TTL jitter는 positive cache 저장에만 적용한다.
 - cache stampede 방지 lock은 아직 적용하지 않았다.
 - negative caching은 아직 적용하지 않았다.
 - cache invalidation 전략은 아직 다루지 않았다.
