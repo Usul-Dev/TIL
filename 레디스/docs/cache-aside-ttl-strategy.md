@@ -71,8 +71,9 @@
 
 Issue #28에서는 cache-aside 읽기 흐름만 구현한다.
 Issue #29에서는 positive cache 저장 시 TTL과 TTL jitter를 적용한다.
-cache stampede 방지 lock, negative caching, 캐시 무효화 전략은 후속 이슈에서
-다룬다.
+Issue #30에서는 동시 cache miss 상황을 재현하고 Redis lock으로 origin 중복
+조회를 완화한다.
+negative caching, 캐시 무효화 전략은 후속 이슈에서 다룬다.
 
 ----
 
@@ -135,9 +136,43 @@ cache보다 짧은 TTL을 별도로 두고, 생성/수정 이벤트와 무효화
 
 ----
 
+## Cache stampede 방지 lock
+
+<img src="cache-stampede-lock-flow.png" width="760">
+
+Cache stampede는 hot key가 없거나 동시에 만료된 시점에 여러 요청이 모두 cache
+miss를 보고 origin 저장소로 몰리는 현상이다. cache-aside 구조에서는 각 요청이
+동시에 SQLite 조회와 Redis write를 수행할 수 있어 origin 부하와 duplicated write가
+발생한다.
+
+현재 user profile 조회는 cache miss 이후 Redis lock을 한 번 획득한다. lock은
+`SET key value NX EX` 방식으로 잡는다.
+
+- lock key: `lock:cache:user:{user_id}:profile`
+- lock value: 요청마다 생성한 owner token
+- lock TTL: 5초
+- unlock: Lua script로 lock value가 owner token과 같을 때만 `DEL` 수행
+
+lock을 획득한 요청만 SQLite를 조회하고 Redis에 profile을 저장한다. lock 획득에
+실패한 요청은 바로 SQLite로 가지 않고 50ms 간격으로 최대 5회 Redis cache를 다시
+조회한다. 이 시간 안에 lock owner가 cache를 채우면 대기 요청은 cache hit로 응답한다.
+재조회가 모두 실패하면 요청을 계속 붙잡지 않고 origin을 조회한다. Redis 연결 장애가
+발생하면 기존 cache-aside fallback과 동일하게 SQLite를 조회하고, Redis write 실패는
+응답 실패로 처리하지 않는다.
+
+이 방식은 stampede를 완전히 제거하는 분산락 구현이 아니라 user profile hot key에
+대한 단순 완화책이다. origin 조회가 lock TTL보다 오래 걸리면 lock이 만료되어 다른
+요청이 다시 origin을 조회할 수 있다. retry 시간을 짧게 잡으면 느린 origin 조회에서
+대기 요청이 fallback으로 넘어가 중복 조회가 다시 발생할 수 있고, retry 시간을 길게
+잡으면 API 응답 지연이 커진다. 또한 negative caching은 아직 없으므로 존재하지 않는
+user profile에 대한 반복 miss는 lock owner가 cache를 채우지 못해 중복 origin 조회가
+발생할 수 있다.
+
+----
+
 ## 현재 한계
 
 - TTL jitter는 positive cache 저장에만 적용한다.
-- cache stampede 방지 lock은 아직 적용하지 않았다.
+- cache stampede 방지 lock은 단일 Redis 인스턴스 기준의 단순 완화책이다.
 - negative caching은 아직 적용하지 않았다.
 - cache invalidation 전략은 아직 다루지 않았다.

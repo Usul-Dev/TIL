@@ -10,14 +10,23 @@ from app.storages.redis import redis_storage
 class UserProfileCache:
     """Store user profiles in Redis for cache-aside reads."""
 
+    _RELEASE_LOCK_SCRIPT = """
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+    end
+    return 0
+    """
+
     def __init__(
         self,
         ttl_seconds: int = 60,
         ttl_jitter_seconds: int = 10,
+        lock_ttl_seconds: int = 5,
         random_source: Random | None = None,
     ) -> None:
         self.ttl_seconds = ttl_seconds
         self.ttl_jitter_seconds = ttl_jitter_seconds
+        self.lock_ttl_seconds = lock_ttl_seconds
         self.random_source = random_source or Random()
 
     def ttl_with_jitter(self) -> int:
@@ -42,6 +51,10 @@ class UserProfileCache:
             Redis key for the cached user profile.
         """
         return f"cache:user:{user_id}:profile"
+
+    def lock_key(self, user_id: int) -> str:
+        """Build the Redis lock key for refreshing a user profile cache."""
+        return f"lock:cache:user:{user_id}:profile"
 
     async def get(self, user_id: int) -> UserProfileResponse | None:
         """Read a user profile from Redis.
@@ -81,4 +94,28 @@ class UserProfileCache:
             self.key(user_id),
             self.ttl_with_jitter(),
             profile.model_dump_json(),
+        )
+
+    async def acquire_refresh_lock(self, user_id: int, token: str) -> bool:
+        """Acquire the user profile cache refresh lock with SET NX EX."""
+        conn = redis_storage.get_connection()
+        acquired = await conn.set(
+            self.lock_key(user_id),
+            token,
+            nx=True,
+            ex=self.lock_ttl_seconds,
+        )
+        return bool(acquired)
+
+    async def release_refresh_lock(self, user_id: int, token: str) -> None:
+        """Release the refresh lock only when the owner token matches."""
+        conn = redis_storage.get_connection()
+        # redis-py types eval() through a shared sync/async mixin, so call the
+        # async command API directly to keep static analysis precise.
+        await conn.execute_command(
+            "EVAL",
+            self._RELEASE_LOCK_SCRIPT,
+            1,
+            self.lock_key(user_id),
+            token,
         )

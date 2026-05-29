@@ -1,3 +1,4 @@
+import asyncio
 from random import Random
 
 import pytest
@@ -25,6 +26,35 @@ class _UnavailableUserProfileCache(UserProfileCache):
 
     async def set(self, user_id: int, profile: UserProfileResponse) -> None:
         raise RedisConnectionError("redis unavailable")
+
+
+class _CountingUserProfileRepository(UserProfileRepository):
+    def __init__(self, profile: UserProfileResponse) -> None:
+        self.profile = profile
+        self.find_count = 0
+
+    def find_by_id(self, user_id: int) -> UserProfileResponse | None:
+        self.find_count += 1
+        return self.profile
+
+
+class _CoordinatedInitialMissUserProfileCache(UserProfileCache):
+    def __init__(self, initial_miss_count: int) -> None:
+        super().__init__()
+        self.initial_miss_count = initial_miss_count
+        self.initial_get_count = 0
+        self.initial_misses_seen = asyncio.Event()
+
+    async def get(self, user_id: int) -> UserProfileResponse | None:
+        if self.initial_get_count < self.initial_miss_count:
+            self.initial_get_count += 1
+            if self.initial_get_count == self.initial_miss_count:
+                self.initial_misses_seen.set()
+
+            await self.initial_misses_seen.wait()
+            return None
+
+        return await super().get(user_id)
 
 
 @pytest.mark.asyncio
@@ -77,6 +107,23 @@ async def test_user_profile_cache_jitter_spreads_ttl_values() -> None:
 
 
 @pytest.mark.asyncio
+async def test_release_refresh_lock_keeps_lock_when_owner_token_differs() -> None:
+    cache = UserProfileCache()
+    conn = redis_storage.get_connection()
+    user_id = 1
+
+    acquired = await cache.acquire_refresh_lock(user_id, "owner-token")
+    await cache.release_refresh_lock(user_id, "other-token")
+
+    assert acquired is True
+    assert await conn.get(cache.lock_key(user_id)) == "owner-token"
+
+    await cache.release_refresh_lock(user_id, "owner-token")
+
+    assert await conn.get(cache.lock_key(user_id)) is None
+
+
+@pytest.mark.asyncio
 async def test_get_user_profile_cache_hit_returns_redis_value() -> None:
     user_id = 1
     cache = UserProfileCache()
@@ -88,6 +135,47 @@ async def test_get_user_profile_cache_hit_returns_redis_value() -> None:
     profile = await get_user_profile(user_id, service=_service())
 
     assert profile.model_dump() == {"name": "cached-mina", "age": 30}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cache_miss_duplicates_origin_reads_without_lock() -> None:
+    repository = _CountingUserProfileRepository(
+        UserProfileResponse(name="origin-mina", age=29),
+    )
+    service = UserProfileService(
+        repository=repository,
+        cache=_CoordinatedInitialMissUserProfileCache(initial_miss_count=5),
+        stampede_protection_enabled=False,
+    )
+
+    profiles = await asyncio.gather(
+        *[get_user_profile(1, service=service) for _ in range(5)],
+    )
+
+    assert [profile.model_dump() for profile in profiles] == [
+        {"name": "origin-mina", "age": 29},
+    ] * 5
+    assert repository.find_count == 5
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cache_miss_uses_redis_lock_to_reduce_origin_reads() -> None:
+    repository = _CountingUserProfileRepository(
+        UserProfileResponse(name="origin-mina", age=29),
+    )
+    service = UserProfileService(
+        repository=repository,
+        cache=_CoordinatedInitialMissUserProfileCache(initial_miss_count=5),
+    )
+
+    profiles = await asyncio.gather(
+        *[get_user_profile(1, service=service) for _ in range(5)],
+    )
+
+    assert [profile.model_dump() for profile in profiles] == [
+        {"name": "origin-mina", "age": 29},
+    ] * 5
+    assert repository.find_count == 1
 
 
 @pytest.mark.asyncio
