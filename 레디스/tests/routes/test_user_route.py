@@ -72,7 +72,9 @@ class _BlockingCacheSetUserProfileCache(UserProfileCache):
         super().__init__()
         self.blocked_profile_name = blocked_profile_name
         self.has_blocked = False
+        # 조회 요청이 오래된 profile을 Redis에 쓰기 직전에 도착했음을 알린다.
         self.set_started = asyncio.Event()
+        # 테스트가 허용할 때까지 오래된 profile의 cache set을 멈춰 둔다.
         self.allow_set = asyncio.Event()
 
     async def set(self, user_id: int, profile: UserProfileResponse) -> None:
@@ -223,9 +225,13 @@ async def test_update_user_profile_waits_for_in_flight_cache_fill() -> None:
 
     repository.save(user_id, UserProfileResponse(name="origin-mina", age=29))
 
+    # 1. 조회 요청이 cache miss 후 SQLite에서 기존 값을 읽고 cache set까지 진입한다.
+    #    helper cache는 이 시점에서 Redis 쓰기를 잠시 멈춰 race 상황을 만든다.
     read_task = asyncio.create_task(get_user_profile(user_id, service=service))
     await cache.set_started.wait()
 
+    # 2. 기존 값을 Redis에 쓰기 전에 PUT 요청을 시작한다.
+    #    올바른 구현이라면 PUT은 refresh lock을 기다려야 한다.
     update_task = asyncio.create_task(
         update_user_profile(
             user_id,
@@ -235,19 +241,26 @@ async def test_update_user_profile_waits_for_in_flight_cache_fill() -> None:
     )
     await asyncio.sleep(0.05)
 
+    # 3. PUT이 먼저 끝나면 위험하다.
+    #    이후 read_task가 오래된 값을 Redis에 저장해 stale cache가 남을 수 있다.
     if update_task.done():
         cache.allow_set.set()
         await asyncio.gather(read_task, update_task, return_exceptions=True)
         pytest.fail("update completed before the in-flight cache fill finished")
 
+    # 4. 멈춰 있던 조회 요청을 마무리한다.
+    #    그 뒤 PUT이 lock을 얻어 SQLite 저장과 cache delete를 수행해야 한다.
     cache.allow_set.set()
     read_profile, updated_profile = await asyncio.gather(read_task, update_task)
 
     conn = redis_storage.get_connection()
     assert read_profile.model_dump() == {"name": "origin-mina", "age": 29}
     assert updated_profile.model_dump() == {"name": "updated-mina", "age": 31}
+    # 5. PUT이 조회 요청보다 나중에 cache delete를 수행했으므로
+    #    최종 Redis cache에는 오래된 값이 남아 있지 않아야 한다.
     assert await conn.get(cache.key(user_id)) is None
 
+    # 6. 다음 조회는 cache miss 후 SQLite의 최신 값을 읽고 Redis를 다시 채운다.
     fresh_profile = await get_user_profile(user_id, service=service)
 
     assert fresh_profile.model_dump() == {"name": "updated-mina", "age": 31}
