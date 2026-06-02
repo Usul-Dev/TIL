@@ -9,7 +9,7 @@ from app.services.user_profile_cache import UserProfileCache
 
 
 class UserProfileService:
-    """Coordinate cache-aside reads for user profile lookups."""
+    """Coordinate cache-aside reads and write-time invalidation."""
 
     def __init__(
         self,
@@ -49,6 +49,26 @@ class UserProfileService:
             return await self._get_user_profile_with_refresh_lock(user_id)
 
         return await self._read_origin_and_cache(user_id)
+
+    async def update_user_profile(
+        self,
+        user_id: int,
+        profile: UserProfileResponse,
+    ) -> UserProfileResponse:
+        """Save the origin profile and invalidate the cached copy.
+
+        The source-of-truth write is performed first. Redis is a performance
+        layer, so cache delete failures are not allowed to roll back a
+        successful SQLite update.
+        """
+        self.repository.save(user_id, profile)
+
+        try:
+            await self.cache.delete(user_id)
+        except RedisError:
+            pass
+
+        return profile
 
     async def _get_user_profile_with_refresh_lock(
         self,

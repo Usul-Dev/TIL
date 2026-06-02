@@ -6,8 +6,9 @@ from fastapi import HTTPException
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.repositories.user_profile_repository import UserProfileRepository
+from app.representations.user_request import UserProfileUpdateRequest
 from app.representations.user_response import UserProfileResponse
-from app.routes.user_route import get_user_profile
+from app.routes.user_route import get_user_profile, update_user_profile
 from app.services.user_profile_cache import UserProfileCache
 from app.services.user_profile_service import UserProfileService
 from app.storages.redis import redis_storage
@@ -25,6 +26,9 @@ class _UnavailableUserProfileCache(UserProfileCache):
         raise RedisConnectionError("redis unavailable")
 
     async def set(self, user_id: int, profile: UserProfileResponse) -> None:
+        raise RedisConnectionError("redis unavailable")
+
+    async def delete(self, user_id: int) -> None:
         raise RedisConnectionError("redis unavailable")
 
 
@@ -135,6 +139,52 @@ async def test_get_user_profile_cache_hit_returns_redis_value() -> None:
     profile = await get_user_profile(user_id, service=_service())
 
     assert profile.model_dump() == {"name": "cached-mina", "age": 30}
+
+
+@pytest.mark.asyncio
+async def test_update_user_profile_deletes_stale_cache_before_next_read() -> None:
+    repository = UserProfileRepository()
+    cache = UserProfileCache()
+    service = UserProfileService(repository=repository, cache=cache)
+    user_id = 1
+
+    repository.save(user_id, UserProfileResponse(name="origin-mina", age=29))
+    await cache.set(user_id, UserProfileResponse(name="stale-mina", age=28))
+
+    updated_profile = await update_user_profile(
+        user_id,
+        UserProfileUpdateRequest(name="updated-mina", age=31),
+        service=service,
+    )
+
+    conn = redis_storage.get_connection()
+    assert updated_profile.model_dump() == {"name": "updated-mina", "age": 31}
+    assert await conn.get(cache.key(user_id)) is None
+
+    profile = await get_user_profile(user_id, service=service)
+
+    assert profile.model_dump() == {"name": "updated-mina", "age": 31}
+    assert await conn.get(cache.key(user_id)) is not None
+
+
+@pytest.mark.asyncio
+async def test_update_user_profile_keeps_origin_write_when_redis_unavailable() -> None:
+    repository = UserProfileRepository()
+    user_id = 1
+
+    updated_profile = await update_user_profile(
+        user_id,
+        UserProfileUpdateRequest(name="updated-mina", age=31),
+        service=UserProfileService(
+            repository=repository,
+            cache=_UnavailableUserProfileCache(),
+        ),
+    )
+
+    stored_profile = repository.find_by_id(user_id)
+    assert updated_profile.model_dump() == {"name": "updated-mina", "age": 31}
+    assert stored_profile is not None
+    assert stored_profile.model_dump() == {"name": "updated-mina", "age": 31}
 
 
 @pytest.mark.asyncio
