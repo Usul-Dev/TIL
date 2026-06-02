@@ -31,6 +31,12 @@ class _UnavailableUserProfileCache(UserProfileCache):
     async def delete(self, user_id: int) -> None:
         raise RedisConnectionError("redis unavailable")
 
+    async def acquire_refresh_lock(self, user_id: int, token: str) -> bool:
+        raise RedisConnectionError("redis unavailable")
+
+    async def release_refresh_lock(self, user_id: int, token: str) -> None:
+        raise RedisConnectionError("redis unavailable")
+
 
 class _CountingUserProfileRepository(UserProfileRepository):
     def __init__(self, profile: UserProfileResponse) -> None:
@@ -59,6 +65,23 @@ class _CoordinatedInitialMissUserProfileCache(UserProfileCache):
             return None
 
         return await super().get(user_id)
+
+
+class _BlockingCacheSetUserProfileCache(UserProfileCache):
+    def __init__(self, blocked_profile_name: str) -> None:
+        super().__init__()
+        self.blocked_profile_name = blocked_profile_name
+        self.has_blocked = False
+        self.set_started = asyncio.Event()
+        self.allow_set = asyncio.Event()
+
+    async def set(self, user_id: int, profile: UserProfileResponse) -> None:
+        if profile.name == self.blocked_profile_name and not self.has_blocked:
+            self.has_blocked = True
+            self.set_started.set()
+            await self.allow_set.wait()
+
+        await super().set(user_id, profile)
 
 
 @pytest.mark.asyncio
@@ -185,6 +208,50 @@ async def test_update_user_profile_keeps_origin_write_when_redis_unavailable() -
     assert updated_profile.model_dump() == {"name": "updated-mina", "age": 31}
     assert stored_profile is not None
     assert stored_profile.model_dump() == {"name": "updated-mina", "age": 31}
+
+
+@pytest.mark.asyncio
+async def test_update_user_profile_waits_for_in_flight_cache_fill() -> None:
+    repository = UserProfileRepository()
+    cache = _BlockingCacheSetUserProfileCache(blocked_profile_name="origin-mina")
+    service = UserProfileService(
+        repository=repository,
+        cache=cache,
+        lock_retry_delay_seconds=0.01,
+    )
+    user_id = 1
+
+    repository.save(user_id, UserProfileResponse(name="origin-mina", age=29))
+
+    read_task = asyncio.create_task(get_user_profile(user_id, service=service))
+    await cache.set_started.wait()
+
+    update_task = asyncio.create_task(
+        update_user_profile(
+            user_id,
+            UserProfileUpdateRequest(name="updated-mina", age=31),
+            service=service,
+        )
+    )
+    await asyncio.sleep(0.05)
+
+    if update_task.done():
+        cache.allow_set.set()
+        await asyncio.gather(read_task, update_task, return_exceptions=True)
+        pytest.fail("update completed before the in-flight cache fill finished")
+
+    cache.allow_set.set()
+    read_profile, updated_profile = await asyncio.gather(read_task, update_task)
+
+    conn = redis_storage.get_connection()
+    assert read_profile.model_dump() == {"name": "origin-mina", "age": 29}
+    assert updated_profile.model_dump() == {"name": "updated-mina", "age": 31}
+    assert await conn.get(cache.key(user_id)) is None
+
+    fresh_profile = await get_user_profile(user_id, service=service)
+
+    assert fresh_profile.model_dump() == {"name": "updated-mina", "age": 31}
+    assert await conn.get(cache.key(user_id)) is not None
 
 
 @pytest.mark.asyncio

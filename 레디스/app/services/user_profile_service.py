@@ -18,12 +18,14 @@ class UserProfileService:
         stampede_protection_enabled: bool = True,
         lock_retry_attempts: int = 5,
         lock_retry_delay_seconds: float = 0.05,
+        write_lock_retry_attempts: int = 100,
     ) -> None:
         self.repository = repository
         self.cache = cache
         self.stampede_protection_enabled = stampede_protection_enabled
         self.lock_retry_attempts = lock_retry_attempts
         self.lock_retry_delay_seconds = lock_retry_delay_seconds
+        self.write_lock_retry_attempts = write_lock_retry_attempts
 
     async def get_user_profile(
         self,
@@ -61,14 +63,26 @@ class UserProfileService:
         layer, so cache delete failures are not allowed to roll back a
         successful SQLite update.
         """
-        self.repository.save(user_id, profile)
+        token = uuid4().hex
+        try:
+            acquired = await self._acquire_refresh_lock_with_retry(
+                user_id,
+                token,
+                self.write_lock_retry_attempts,
+            )
+        except RedisError:
+            return await self._save_origin_and_invalidate_cache(user_id, profile)
+
+        if not acquired:
+            return await self._save_origin_and_invalidate_cache(user_id, profile)
 
         try:
-            await self.cache.delete(user_id)
-        except RedisError:
-            pass
-
-        return profile
+            return await self._save_origin_and_invalidate_cache(user_id, profile)
+        finally:
+            try:
+                await self.cache.release_refresh_lock(user_id, token)
+            except RedisError:
+                pass
 
     async def _get_user_profile_with_refresh_lock(
         self,
@@ -114,6 +128,38 @@ class UserProfileService:
                 return cached_profile
 
         return await self._read_origin_and_cache(user_id)
+
+    async def _acquire_refresh_lock_with_retry(
+        self,
+        user_id: int,
+        token: str,
+        retry_attempts: int,
+    ) -> bool:
+        for attempt in range(retry_attempts + 1):
+            acquired = await self.cache.acquire_refresh_lock(user_id, token)
+            if acquired:
+                return True
+
+            if attempt == retry_attempts:
+                return False
+
+            await asyncio.sleep(self.lock_retry_delay_seconds)
+
+        return False
+
+    async def _save_origin_and_invalidate_cache(
+        self,
+        user_id: int,
+        profile: UserProfileResponse,
+    ) -> UserProfileResponse:
+        self.repository.save(user_id, profile)
+
+        try:
+            await self.cache.delete(user_id)
+        except RedisError:
+            pass
+
+        return profile
 
     async def _read_origin_and_cache(
         self,
