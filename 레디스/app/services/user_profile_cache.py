@@ -96,6 +96,18 @@ class UserProfileCache:
             profile.model_dump_json(),
         )
 
+    async def delete(self, user_id: int) -> None:
+        """Delete a cached user profile from Redis.
+
+        Args:
+            user_id: User identifier.
+
+        Returns:
+            None.
+        """
+        conn = redis_storage.get_connection()
+        await conn.delete(self.key(user_id))
+
     async def acquire_refresh_lock(self, user_id: int, token: str) -> bool:
         """Acquire the user profile cache refresh lock with SET NX EX."""
         conn = redis_storage.get_connection()
