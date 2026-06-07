@@ -27,6 +27,19 @@ class UserProfileService:
         self.lock_retry_delay_seconds = lock_retry_delay_seconds
         self.write_lock_retry_attempts = write_lock_retry_attempts
 
+    async def _get_cached_profile(
+        self,
+        user_id: int,
+    ) -> tuple[bool, UserProfileResponse | None]:
+        cached_profile = await self.cache.get(user_id)
+        if cached_profile is not None:
+            return True, cached_profile
+
+        if await self.cache.has_negative(user_id):
+            return True, None
+
+        return False, None
+
     async def get_user_profile(
         self,
         user_id: int,
@@ -40,11 +53,11 @@ class UserProfileService:
             User profile when found in Redis or SQLite, otherwise None.
         """
         try:
-            cached_profile = await self.cache.get(user_id)
+            cached, cached_profile = await self._get_cached_profile(user_id)
         except RedisError:
             return await self._read_origin_and_cache(user_id)
 
-        if cached_profile is not None:
+        if cached:
             return cached_profile
 
         if self.stampede_protection_enabled:
@@ -99,11 +112,12 @@ class UserProfileService:
 
         try:
             try:
-                cached_profile = await self.cache.get(user_id)
+                cached, cached_profile = await self._get_cached_profile(user_id)
             except RedisError:
+                cached = False
                 cached_profile = None
 
-            if cached_profile is not None:
+            if cached:
                 return cached_profile
 
             return await self._read_origin_and_cache(user_id)
@@ -120,11 +134,11 @@ class UserProfileService:
         for _ in range(self.lock_retry_attempts):
             await asyncio.sleep(self.lock_retry_delay_seconds)
             try:
-                cached_profile = await self.cache.get(user_id)
+                cached, cached_profile = await self._get_cached_profile(user_id)
             except RedisError:
                 return await self._read_origin_and_cache(user_id)
 
-            if cached_profile is not None:
+            if cached:
                 return cached_profile
 
         return await self._read_origin_and_cache(user_id)
@@ -167,6 +181,11 @@ class UserProfileService:
     ) -> UserProfileResponse | None:
         profile = self.repository.find_by_id(user_id)
         if profile is None:
+            try:
+                await self.cache.set_negative(user_id)
+            except RedisError:
+                pass
+
             return None
 
         try:
