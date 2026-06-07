@@ -28,6 +28,12 @@ class _UnavailableUserProfileCache(UserProfileCache):
     async def set(self, user_id: int, profile: UserProfileResponse) -> None:
         raise RedisConnectionError("redis unavailable")
 
+    async def has_negative(self, user_id: int) -> bool:
+        raise RedisConnectionError("redis unavailable")
+
+    async def set_negative(self, user_id: int) -> None:
+        raise RedisConnectionError("redis unavailable")
+
     async def delete(self, user_id: int) -> None:
         raise RedisConnectionError("redis unavailable")
 
@@ -39,7 +45,7 @@ class _UnavailableUserProfileCache(UserProfileCache):
 
 
 class _CountingUserProfileRepository(UserProfileRepository):
-    def __init__(self, profile: UserProfileResponse) -> None:
+    def __init__(self, profile: UserProfileResponse | None) -> None:
         self.profile = profile
         self.find_count = 0
 
@@ -133,6 +139,19 @@ async def test_user_profile_cache_jitter_spreads_ttl_values() -> None:
     ttl_values = [await conn.ttl(cache.key(user_id)) for user_id in range(1, 4)]
 
     assert len(set(ttl_values)) > 1
+
+
+@pytest.mark.asyncio
+async def test_user_profile_negative_cache_uses_shorter_ttl() -> None:
+    user_id = 1
+    cache = UserProfileCache()
+    await cache.set_negative(user_id)
+
+    conn = redis_storage.get_connection()
+    ttl_seconds = await conn.ttl(cache.negative_key(user_id))
+
+    assert 1 <= ttl_seconds <= cache.negative_ttl_seconds
+    assert ttl_seconds < cache.ttl_seconds
 
 
 @pytest.mark.asyncio
@@ -268,6 +287,28 @@ async def test_update_user_profile_waits_for_in_flight_cache_fill() -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_user_profile_deletes_negative_cache() -> None:
+    repository = UserProfileRepository()
+    cache = UserProfileCache()
+    service = UserProfileService(repository=repository, cache=cache)
+    user_id = 1
+
+    await cache.set_negative(user_id)
+
+    await update_user_profile(
+        user_id,
+        UserProfileUpdateRequest(name="created-mina", age=31),
+        service=service,
+    )
+
+    conn = redis_storage.get_connection()
+    assert await conn.get(cache.negative_key(user_id)) is None
+
+    profile = await get_user_profile(user_id, service=service)
+    assert profile.model_dump() == {"name": "created-mina", "age": 31}
+
+
+@pytest.mark.asyncio
 async def test_concurrent_cache_miss_duplicates_origin_reads_without_lock() -> None:
     repository = _CountingUserProfileRepository(
         UserProfileResponse(name="origin-mina", age=29),
@@ -339,6 +380,27 @@ async def test_get_user_profile_uses_sqlite_when_redis_unavailable() -> None:
     )
 
     assert profile.model_dump() == {"name": "origin-mina", "age": 29}
+
+
+@pytest.mark.asyncio
+async def test_repeated_missing_user_profile_uses_negative_cache() -> None:
+    repository = _CountingUserProfileRepository(None)
+    service = UserProfileService(
+        repository=repository,
+        cache=UserProfileCache(),
+    )
+    user_id = 999
+
+    for _ in range(3):
+        with pytest.raises(HTTPException) as exc:
+            await get_user_profile(user_id, service=service)
+
+        assert exc.value.status_code == 404
+
+    conn = redis_storage.get_connection()
+    cache = service.cache
+    assert repository.find_count == 1
+    assert await conn.get(cache.negative_key(user_id)) == "1"
 
 
 @pytest.mark.asyncio

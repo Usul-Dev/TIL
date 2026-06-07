@@ -21,11 +21,13 @@ class UserProfileCache:
         self,
         ttl_seconds: int = 60,
         ttl_jitter_seconds: int = 10,
+        negative_ttl_seconds: int = 10,
         lock_ttl_seconds: int = 5,
         random_source: Random | None = None,
     ) -> None:
         self.ttl_seconds = ttl_seconds
         self.ttl_jitter_seconds = ttl_jitter_seconds
+        self.negative_ttl_seconds = negative_ttl_seconds
         self.lock_ttl_seconds = lock_ttl_seconds
         self.random_source = random_source or Random()
 
@@ -56,6 +58,10 @@ class UserProfileCache:
         """Build the Redis lock key for refreshing a user profile cache."""
         return f"lock:cache:user:{user_id}:profile"
 
+    def negative_key(self, user_id: int) -> str:
+        """Build the Redis key for a missing user profile marker."""
+        return f"{self.key(user_id)}:missing"
+
     async def get(self, user_id: int) -> UserProfileResponse | None:
         """Read a user profile from Redis.
 
@@ -79,6 +85,11 @@ class UserProfileCache:
         except (json.JSONDecodeError, ValidationError) as exc:
             raise ValueError("Invalid cached user profile data") from exc
 
+    async def has_negative(self, user_id: int) -> bool:
+        """Return whether Redis has a cached missing marker for the user."""
+        conn = redis_storage.get_connection()
+        return bool(await conn.exists(self.negative_key(user_id)))
+
     async def set(self, user_id: int, profile: UserProfileResponse) -> None:
         """Store a user profile in Redis with TTL jitter.
 
@@ -96,6 +107,15 @@ class UserProfileCache:
             profile.model_dump_json(),
         )
 
+    async def set_negative(self, user_id: int) -> None:
+        """Cache a missing user profile marker with a short TTL."""
+        conn = redis_storage.get_connection()
+        await conn.setex(
+            self.negative_key(user_id),
+            self.negative_ttl_seconds,
+            "1",
+        )
+
     async def delete(self, user_id: int) -> None:
         """Delete a cached user profile from Redis.
 
@@ -106,7 +126,7 @@ class UserProfileCache:
             None.
         """
         conn = redis_storage.get_connection()
-        await conn.delete(self.key(user_id))
+        await conn.delete(self.key(user_id), self.negative_key(user_id))
 
     async def acquire_refresh_lock(self, user_id: int, token: str) -> bool:
         """Acquire the user profile cache refresh lock with SET NX EX."""
