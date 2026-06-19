@@ -6,7 +6,9 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned]
+    # assigned 이벤트는 할당 행위자(actor)가 아니라 이슈 작성자의
+    # author_association만 검사되어 OWNER 제한이 우회될 수 있으므로 제외한다.
+    types: [opened]
   pull_request_review:
     types: [submitted]
 
@@ -17,11 +19,17 @@ concurrency:
 
 jobs:
   claude:
+    # @claude 멘션이 있고, 작성자가 OWNER일 때만 실행한다.
+    # (외부 사용자가 멘션만으로 워크플로를 트리거해 사용량을 소모하는 것을 막는다.)
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        github.event.comment.author_association == 'OWNER') ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        github.event.comment.author_association == 'OWNER') ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        github.event.review.author_association == 'OWNER') ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        github.event.issue.author_association == 'OWNER')
     runs-on: ubuntu-latest
     permissions:
       contents: read
