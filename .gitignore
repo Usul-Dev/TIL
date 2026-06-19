@@ -23,7 +23,6 @@ share/python-wheels/
 MANIFEST
 
 # 가상환경
-.env
 .venv
 env/
 venv/
@@ -36,9 +35,6 @@ venv.bak/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
-Thumbs.db
 
 # 테스팅
 .tox/
