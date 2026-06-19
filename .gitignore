@@ -133,3 +133,4 @@ $RECYCLE.BIN/
 # Claude Code / OMC (로컬 상태·개인 오버라이드는 추적하지 않음)
 .omc/
 .claude/settings.local.json
+CLAUDE.local.md
