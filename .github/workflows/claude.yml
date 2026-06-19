@@ -10,6 +10,11 @@ on:
   pull_request_review:
     types: [submitted]
 
+# 같은 이슈/PR에서 멘션이 연속되면 이전 실행을 취소한다.
+concurrency:
+  group: claude-mention-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude:
     if: |
