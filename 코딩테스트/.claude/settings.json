@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run python:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(git status:*)",
+      "Bash(git diff --stat:*)"
+    ]
+  }
+}
