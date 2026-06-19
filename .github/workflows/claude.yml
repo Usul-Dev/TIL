@@ -6,7 +6,9 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned]
+    # assigned 이벤트는 할당 행위자(actor)가 아니라 이슈 작성자의
+    # author_association만 검사되어 OWNER 제한이 우회될 수 있으므로 제외한다.
+    types: [opened]
   pull_request_review:
     types: [submitted]
 
