@@ -1,12 +1,9 @@
-from fastapi.routing import APIRoute, APIRouter
+from fastapi.routing import APIRouter
 from pydantic import BaseModel
 
 from app.storages.redis import redis_storage
 
-basic_v1_router = APIRouter(
-    route_class=APIRoute,
-    prefix="/api/v1",
-)
+basic_v1_router = APIRouter(prefix="/api/v1")
 
 
 @basic_v1_router.get("/")

@@ -1,17 +1,14 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
-from fastapi.routing import APIRoute, APIRouter
+from fastapi.routing import APIRouter
 
 from app.dependencies import get_user_profile_service
 from app.representations.user_request import UserProfileUpdateRequest
 from app.representations.user_response import UserProfileResponse
 from app.services.user_profile_service import UserProfileService
 
-user_v1_router = APIRouter(
-    route_class=APIRoute,
-    prefix="/api/v1",
-)
+user_v1_router = APIRouter(prefix="/api/v1")
 
 
 @user_v1_router.get(
