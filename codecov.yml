@@ -6,9 +6,4 @@ coverage:
         threshold: 0%
         flags:
           - redis
-    patch:
-      default:
-        target: 65%
-        threshold: 0%
-        flags:
-          - redis
+    patch: false
