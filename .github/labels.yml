@@ -12,6 +12,9 @@
 - name: area/system-design
   color: "1D76DB"
   description: System Design 관련 학습
+- name: area/rag
+  color: "0052CC"
+  description: RAG 관련 학습
 - name: type/topic
   color: "FBCA04"
   description: Parent Issue로 관리할 학습 주제
