@@ -17,9 +17,16 @@ dev = [
 [tool.ruff]
 line-length = 88
 
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.ruff.lint]
 select = [
     "E",
     "F",
     "I",
+    "D",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
