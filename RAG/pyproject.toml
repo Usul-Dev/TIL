@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "RAG study"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "anthropic>=0.113.0",
+]
 
 [dependency-groups]
 dev = [
