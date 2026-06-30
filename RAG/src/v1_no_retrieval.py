@@ -18,14 +18,14 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 MODEL = "claude-opus-4-8"
 
 
-def load_docs(data_dir: Path = DATA_DIR) -> dict[str, str]:
+def load_docs() -> dict[str, str]:
     """data/ 안의 .pdf 문서에서 텍스트를 추출해 {파일명: 본문}으로 모두 읽는다.
 
     실무 RAG 입력은 대부분 PDF·문서 파일이라 PDF 텍스트 추출부터 시작한다.
     추출은 PyMuPDF(속도·정확도 균형). 단 AGPL 라이선스라 상용 배포 시 주의.
     """
     docs = {}
-    for p in sorted(data_dir.glob("*.pdf")):
+    for p in sorted(DATA_DIR.glob("*.pdf")):
         with pymupdf.open(p) as doc:
             docs[p.name] = "\n".join(page.get_text() for page in doc)
     return docs
