@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="540" viewBox="0 0 820 540" font-family="'Comic Sans MS','Segoe Print','Apple SD Gothic Neo','Nanum Pen Script',cursive,sans-serif">
+  <!-- ponytail: 손그림 느낌은 wobble 없이 둥근 모서리 + 손글씨 폰트로 근사. 진짜 재편집 필요하면 Excalidraw에서 다시. -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .box   { fill:#fffefb; stroke:#333; stroke-width:2; rx:14; }
+      .blue  { fill:#e7f0ff; stroke:#2b5cad; }
+      .green { fill:#e6f7ec; stroke:#2e8b57; }
+      .amber { fill:#fff4e0; stroke:#c8841a; }
+      .pink  { fill:#fdeaf1; stroke:#c44d77; }
+      .lbl   { font-size:15px; fill:#222; text-anchor:middle; }
+      .lane  { font-size:13px; fill:#888; }
+      .edge  { stroke:#444; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="540" fill="#fffdf7"/>
+  <text x="30" y="42" font-size="26" fill="#222">RAG 파이프라인 한눈에 보기</text>
+
+  <!-- ===== Indexing lane (offline) ===== -->
+  <text x="30" y="92" class="lane">① 인덱싱 (오프라인 · 미리 준비)</text>
+  <rect class="box blue"  x="30"  y="105" width="150" height="60" rx="14"/>
+  <text class="lbl" x="105" y="140">문서 / 지식</text>
+
+  <rect class="box blue"  x="220" y="105" width="150" height="60" rx="14"/>
+  <text class="lbl" x="295" y="133">청킹</text>
+  <text class="lbl" x="295" y="153" font-size="11" fill="#666">(조각 나누기)</text>
+
+  <rect class="box blue"  x="410" y="105" width="150" height="60" rx="14"/>
+  <text class="lbl" x="485" y="133">임베딩</text>
+  <text class="lbl" x="485" y="153" font-size="11" fill="#666">(벡터로 변환)</text>
+
+  <rect class="box green" x="610" y="100" width="170" height="70" rx="14"/>
+  <text class="lbl" x="695" y="132">벡터 DB</text>
+  <text class="lbl" x="695" y="152" font-size="11" fill="#666">(검색용 인덱스)</text>
+
+  <path class="edge" d="M180,135 H218"/>
+  <path class="edge" d="M370,135 H408"/>
+  <path class="edge" d="M560,135 H608"/>
+
+  <!-- ===== Query lane (online) ===== -->
+  <text x="30" y="248" class="lane">② 질의 (실시간 · 사용자 요청마다)</text>
+  <rect class="box amber" x="30"  y="262" width="150" height="60" rx="14"/>
+  <text class="lbl" x="105" y="297">사용자 질문</text>
+
+  <rect class="box amber" x="220" y="262" width="150" height="60" rx="14"/>
+  <text class="lbl" x="295" y="297">질문 임베딩</text>
+
+  <rect class="box green" x="410" y="257" width="150" height="70" rx="14"/>
+  <text class="lbl" x="485" y="289">벡터 검색</text>
+  <text class="lbl" x="485" y="309" font-size="11" fill="#666">(비슷한 문서 찾기)</text>
+
+  <rect class="box green" x="600" y="257" width="180" height="70" rx="14"/>
+  <text class="lbl" x="690" y="289">리랭킹</text>
+  <text class="lbl" x="690" y="309" font-size="11" fill="#666">(정확도 ↑)</text>
+
+  <path class="edge" d="M180,292 H218"/>
+  <path class="edge" d="M370,292 H408"/>
+  <path class="edge" d="M560,292 H598"/>
+
+  <!-- DB feeds the search -->
+  <path class="edge" d="M695,170 V200 H485 V255" stroke-dasharray="5,5"/>
+  <text x="500" y="195" font-size="11" fill="#2e8b57">인덱스 조회</text>
+
+  <!-- ===== Generation ===== -->
+  <rect class="box pink"  x="220" y="400" width="200" height="70" rx="14"/>
+  <text class="lbl" x="320" y="432">컨텍스트 주입</text>
+  <text class="lbl" x="320" y="452" font-size="11" fill="#666">질문 + 검색 문서</text>
+
+  <rect class="box pink"  x="470" y="400" width="140" height="70" rx="14"/>
+  <text class="lbl" x="540" y="442">LLM</text>
+
+  <rect class="box pink"  x="650" y="400" width="130" height="70" rx="14"/>
+  <text class="lbl" x="715" y="442">답변</text>
+
+  <path class="edge" d="M690,327 V365 H320 V398"/>
+  <path class="edge" d="M420,435 H468"/>
+  <path class="edge" d="M610,435 H648"/>
+
+  <!-- trade-off note -->
+  <text x="30" y="510" font-size="13" fill="#b14"> 트레이드오프: 검색 정확도(recall) ↔ 지연(latency) ↔ 토큰 비용</text>
+</svg>
