@@ -51,28 +51,28 @@ def ask(question: str, docs: dict[str, str] | None = None) -> str:
         raise SystemExit(f"{DATA_DIR}에 PDF가 없다. 문서를 넣고 다시 실행하라.")
     prompt = build_prompt(docs, question)
     client = Anthropic()
-    msg = client.messages.create(
+    response = client.messages.create(
         model=MODEL,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
     # 학습용 가시성: 어떤 문서가 통째로 들어갔고 토큰이 얼마나 들었는지 보여준다.
     # ponytail: stderr로만 빼 답변(stdout)은 깨끗하게 유지.
-    u = msg.usage
+    usage = response.usage
     print(
         f"[주입 문서] {', '.join(docs)}\n"
-        f"[토큰] input={u.input_tokens:,} output={u.output_tokens:,}",
+        f"[토큰] input={usage.input_tokens:,} output={usage.output_tokens:,}",
         file=sys.stderr,
     )
-    return msg.content[0].text
+    return next((block.text for block in response.content if block.type == "text"), "")
 
 
-def _selfcheck() -> None:
+def _self_check() -> None:
     """LLM 호출 없이 프롬프트 조립 로직만 검증한다."""
-    docs = {"a.pdf": "Redis는 인메모리 저장소다.", "b.pdf": "TTL은 만료 시간이다."}
-    p = build_prompt(docs, "TTL이 뭐야?")
-    assert "Redis는 인메모리" in p and "TTL은 만료" in p, "모든 문서가 주입돼야 한다"
-    assert "TTL이 뭐야?" in p, "질문이 포함돼야 한다"
+    docs = {"a.pdf": "첫째 문서 내용.", "b.pdf": "둘째 문서 내용."}
+    p = build_prompt(docs, "테스트 질문")
+    assert "첫째 문서" in p and "둘째 문서" in p, "모든 문서가 주입돼야 한다"
+    assert "테스트 질문" in p, "질문이 포함돼야 한다"
     assert p.index("# 문서") < p.index("# 질문"), "문서가 질문보다 앞에 와야 한다"
     assert "[a.pdf]" in p and "출처" in p, "출처 표기(머리표·지시)가 있어야 한다"
 
@@ -93,4 +93,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         print(ask(sys.argv[1]))
     else:
-        _selfcheck()
+        _self_check()
