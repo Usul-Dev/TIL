@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "RAG study"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "anthropic>=0.113.0",
+    "pymupdf>=1.28.0",
+]
 
 [dependency-groups]
 dev = [
@@ -14,9 +17,16 @@ dev = [
 [tool.ruff]
 line-length = 88
 
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.ruff.lint]
 select = [
     "E",
     "F",
     "I",
+    "D",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
